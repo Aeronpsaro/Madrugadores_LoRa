@@ -2,7 +2,6 @@
 #include <LoRa.h>
 #include <Arduino_PMIC.h>
 #include <RTCZero.h>
-#include "sendUtils.h"
 #define TX_LAPSE_MS          10000
 
 RTCZero rtc;
@@ -19,10 +18,17 @@ const uint8_t NODE2 = 0x32;
 const uint8_t NODE3 = 0x33;
 const uint8_t localAddress = 0x31;     // Dirección de este dispositivo
 const uint8_t BROADCAST = 0xFF;
+uint8_t currentNode;
+uint8_t destiny;
 uint8_t destination = BROADCAST;         // Dirección de destino, 0xFF es la dirección de broadcast
 
 volatile bool txDoneFlag = true;       // Flag para indicar cuando ha finalizado una transmisión
 volatile bool transmitting = false;
+
+	static uint32_t lastSendTime_ms = 0;
+	static uint16_t msgCount = 0;
+	static uint32_t txInterval_ms = TX_LAPSE_MS;
+	static uint32_t tx_begin_ms = 0;
 
 // Estructura para almacenar los datos de los nodos externos
 typedef struct {
@@ -60,18 +66,19 @@ const int MIN_RSSI = -115;
 float MIN_SNR = -7;
 
 //Configuracion Nodo
-LoraDatas_t thisNode = {1, randomTimeSleep(), NULL, NULL, false};
+LoraDatas_t thisNode = {1, NULL, NULL, NULL, false};
 LoraDatas_t node2 = {2, NULL, NULL, NULL, false};
 LoraDatas_t node3 = {3, NULL, NULL, NULL, false};
 
 void loop() {
 	// put your main code here, to run repeatedly:
-	static uint32_t lastSendTime_ms = 0;
-	static uint16_t msgCount = 0;
-	static uint32_t txInterval_ms = TX_LAPSE_MS;
-	static uint32_t tx_begin_ms = 0;
+	lastSendTime_ms = 0;
+	msgCount = 0;
+	txInterval_ms = TX_LAPSE_MS;
+	tx_begin_ms = 0;
 	//Broadcast
-	sendBroadcast;
+  destination = BROADCAST;
+	sendBroadcast();
 	firstTime = false;
 
 	if(!flagMessages) {
@@ -79,9 +86,34 @@ void loop() {
 		int dato = getData();
 		thisNode.message = dato;
 		//Broadcast
-		sendBroadcast;
+    destination = BROADCAST;
+		sendBroadcast();
 		//Comprobar si la dirección es mi destino (enviar) con un random
+    destiny = sendMessageTo();
 
-		//Comprobar si su tiempo es > que el mío, le mando el dato y sleep sino, que me envíe sus datos
-	}
+    if(destiny == currentNode){
+      destination = currentNode;
+      prepareSend();
+    }else {
+      if(currentNode == NODE2){
+        //Comprueba cuanto tarde
+        if(thisNode.timeGoSleep < node2.timeGoSleep){
+          destination = NODE2;
+          prepareSend();
+        }else{
+          //Cancelar el sleep
+          destination = BROADCAST;
+        }
+      }else {
+        //Comprueba cuanto tarde
+        if(thisNode.timeGoSleep < node3.timeGoSleep){
+          destination = NODE3;
+          prepareSend();
+        }else{
+          //Cancelar el sleep
+          destination = BROADCAST;
+        }
+      }
+    }
+  }
 }
