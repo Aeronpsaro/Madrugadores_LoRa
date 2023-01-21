@@ -28,7 +28,7 @@ volatile bool transmitting = false;
 typedef struct {
 	uint8_t name;
 	uint8_t timeGoSleep;
-	uint8_t message;
+	int message;
 	int listOfMessages[30];
 	bool haveMessagesForMe;
 } LoraDatas_t;
